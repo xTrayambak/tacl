@@ -91,8 +91,11 @@ func alloc*[N: static int](
 
   # else, we'll have to allocate a new chunk
   let buffer = bump.allocRaw(size + ChunkSize)
-  if buffer == nil and OOMCausesPanic:
-    raise newException(OutOfMemDefect, "Out of memory in bump allocator")
+  if buffer == nil:
+    when OOMCausesPanic:
+      raise newException(OutOfMemDefect, "Out of memory in bump allocator")
+
+    return nil
 
   let chunk = cast[ptr Chunk](buffer)
 
