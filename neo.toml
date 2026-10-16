@@ -11,4 +11,3 @@ binaries = []
 version = "2.2.0"
 
 [dependencies]
-overdrive = ">= 0.2.0"

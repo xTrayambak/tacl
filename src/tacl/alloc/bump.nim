@@ -25,7 +25,10 @@ type
       # It's better to align the pool, as sometimes when you give memory from here to code that expects proper alignment for stuff like SIMD, it immediately dies.
     pos: uint64 # The current position at which the allocator is standing
 
-    chunks: ptr Chunk # The current list of chunks 
+    chunks: ptr Chunk # The current list of chunks
+    bottom: ptr Chunk # Cached bottom of the list of chunks
+
+    freeChunks: uint64
 
 const ChunkSize = cast[uint64](sizeof(Chunk))
 
@@ -66,6 +69,11 @@ func allocRaw*[N: static int](
 func findFreeChunk[N: static int](
     bump: var BumpAlloc[N], size: uint64
 ): ptr Chunk {.inline, raises: [].} =
+  if bump.freeChunks == 0'u64:
+    # If we do not have any free tracked chunks, there is no point in traversing
+    # down the `chunks` list to find any.
+    return nil
+
   # TODO: Maybe we could eventually collapse two contiguous chunks adding up to
   # `size` bytes into a single one eventually? That sounds nice.
   var freeChunk = bump.chunks
@@ -87,6 +95,7 @@ func alloc*[N: static int](
   if reusedChunk != nil:
     # if we found a reusable chunk, nice. we'll just mark it used
     reusedChunk.free = 0'u8
+    dec bump.freeChunks
     return cast[pointer](cast[uint64](reusedChunk) + ChunkSize)
 
   # else, we'll have to allocate a new chunk
@@ -102,18 +111,24 @@ func alloc*[N: static int](
   chunk.size = size
   chunk.free = 0'u8
 
-  if bump.chunks != nil:
-    var curr = bump.chunks
-    while curr.next != nil:
-      curr = curr.next
+  if bump.bottom != nil:
+    # OPTIMIZATION: If we have a specified bottom, write directly to its `next` field.
+    # If we do not, then we probably haven't allocated a buffer as of yet.
+    bump.bottom.next = chunk
 
-    curr.next = chunk
-  else:
+  if bump.chunks == nil:
+    # We (probably) are the very first allocation. Begin this list so that other routines
+    # that traverse it work properly.
     bump.chunks = chunk
+
+  # We are now the bottom.
+  bump.bottom = chunk
 
   cast[pointer](cast[uint64](buffer) + ChunkSize)
 
-func free*[N: static int](bump: BumpAlloc[N], buffer: pointer) {.inline, raises: [].} =
+func free*[N: static int](
+    bump: var BumpAlloc[N], buffer: pointer
+) {.inline, raises: [].} =
   ## Deallocate a chunk allocated via this bump allocator.
   ##
   ## **Note**: There's no real deallocation occurring here. No memory can be reclaimed by the kernel. The chunk simply becomes available for subsequent allocations.
@@ -128,18 +143,11 @@ func free*[N: static int](bump: BumpAlloc[N], buffer: pointer) {.inline, raises:
   let header = cast[ptr Chunk](cast[uint64](buffer) - ChunkSize)
   header.free = 1'u8
 
-func freeChunks*[N: static int](bump: BumpAlloc[N]): uint64 {.raises: [].} =
+  inc bump.freeChunks
+
+func freeChunks*[N: static int](bump: BumpAlloc[N]): uint64 {.inline, raises: [].} =
   ## Count the number of chunks that are currently marked as free.
-  var n: uint64
-
-  var curr = bump.chunks
-  while curr != nil:
-    if curr.free == 1'u8:
-      inc n
-
-    curr = curr.next
-
-  n
+  bump.freeChunks
 
 func totalChunks*[N: static int](bump: BumpAlloc[N]): uint64 {.raises: [].} =
   ## Count the number of chunks that are currently allocated.
