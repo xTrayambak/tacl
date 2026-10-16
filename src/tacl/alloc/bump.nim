@@ -47,6 +47,8 @@ func reset*[N: static int](bump: var BumpAlloc[N]) =
       bump.pool[i] = 0'u8
 
   bump.chunks = nil
+  bump.bottom = nil
+  bump.freeChunks = 0'u64
 
 func front*[N: static int](bump: BumpAlloc[N]): pointer {.inline, raises: [].} =
   ## Get the pointer to the start of the allocator pool.

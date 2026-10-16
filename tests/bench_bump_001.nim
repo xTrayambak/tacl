@@ -1,6 +1,7 @@
 ## A very basic benchmark to stress parts of the allocator that had always bugged me as inefficient.
 ##
 ## **NOTE**: requires -d:taclBumpAllocSilentOOM
+## **NOTE**: requires `benchy` package
 
 import std/[random, strformat]
 import pkg/benchy
