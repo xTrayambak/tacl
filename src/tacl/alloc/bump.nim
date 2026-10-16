@@ -14,7 +14,12 @@ const
   OOMCausesPanic = not defined(taclBumpAllocSilentOOM)
     ## If enabled, then this allocator will simply make its front-facing allocation routines silently return `nil` instead of causing a defect and aborting.
 
+  DoubleFreeCausesPanic* = not defined(taclBumpAllocDoubleFreeNoop)
+    ## If enabled, then this allocator will simply no-op an attempt to free an already free chunk, instead of causing a defect and aborting.
+
 type
+  DoubleFreeDefect* = object of Defect
+
   Chunk = object
     ## Internal type, this is used to track chunks in the allocator. It's basically a header.
     ## It too lives in the bump allocator pool :^)
@@ -147,6 +152,15 @@ func free*[N: static int](
 
   # we basically need to mark this chunk free. that's it.
   let header = cast[ptr Chunk](cast[uint64](buffer) - ChunkSize)
+  if header.free == 1'u8:
+    # If the header is already freed,
+    when DoubleFreeCausesPanic:
+      # Panic.
+      raise newException(DoubleFreeDefect, "Attempt to double-free buffer!")
+
+    # Otherwise, no-op it.
+    return
+
   header.free = 1'u8
 
   inc bump.freeChunks
