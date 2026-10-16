@@ -9,7 +9,10 @@
 
 const
   UseLibcMemMethods = not defined(taclBumpAllocDontUseLibcMethods)
+    ## If enabled, then this allocator will attempt to avoid utilizing any C standard library methods directly (e.g `zeroMem`, which translates down to a `memset`).
+
   OOMCausesPanic = not defined(taclBumpAllocSilentOOM)
+    ## If enabled, then this allocator will simply make its front-facing allocation routines silently return `nil` instead of causing a defect and aborting.
 
 type
   Chunk = object
@@ -23,10 +26,10 @@ type
   BumpAlloc*[N: static int] = object
     pool {.align: 16.}: array[N, uint8]
       # It's better to align the pool, as sometimes when you give memory from here to code that expects proper alignment for stuff like SIMD, it immediately dies.
-    pos: uint64 # The current position at which the allocator is standing
+    pos: uint64 ## The current position at which the allocator is standing
 
-    chunks: ptr Chunk # The current list of chunks
-    bottom: ptr Chunk # Cached bottom of the list of chunks
+    chunks: ptr Chunk ## The current list of chunks
+    bottom: ptr Chunk ## Cached bottom of the list of chunks
 
     freeChunks: uint64
 
