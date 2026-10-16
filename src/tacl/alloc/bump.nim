@@ -113,6 +113,7 @@ func alloc*[N: static int](
 
   chunk.size = size
   chunk.free = 0'u8
+  chunk.next = nil
 
   if bump.bottom != nil:
     # OPTIMIZATION: If we have a specified bottom, write directly to its `next` field.
